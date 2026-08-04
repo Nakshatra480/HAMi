@@ -432,4 +432,16 @@ func Test_ContainerLister_Update(t *testing.T) {
 		assert.Equal(t, got.ContainerName, "mycontainer")
 		defer func() { _ = syscall.Munmap(got.data) }()
 	})
+
+	t.Run("directory with no underscore is skipped without panic", func(t *testing.T) {
+		dir := t.TempDir()
+		assert.NilError(t, os.Mkdir(filepath.Join(dir, "nodashhere"), 0755))
+		l := &ContainerLister{
+			containerPath: dir,
+			containers:    map[string]*ContainerUsage{},
+			podLister:     newTestPodLister(),
+		}
+		assert.NilError(t, l.Update())
+		assert.Equal(t, len(l.containers), 0)
+	})
 }

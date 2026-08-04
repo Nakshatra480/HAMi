@@ -186,7 +186,12 @@ func (l *ContainerLister) Update() error {
 			continue
 		}
 		dirName := filepath.Join(l.containerPath, entry.Name())
-		podUID := strings.Split(entry.Name(), "_")[0]
+		parts := strings.SplitN(entry.Name(), "_", 2)
+		if len(parts) != 2 {
+			klog.Warningf("skipping unexpected directory name %q in monitor path", entry.Name())
+			continue
+		}
+		podUID, containerName := parts[0], parts[1]
 		if !podUIDs[podUID] {
 			dirInfo, err := os.Stat(dirName)
 			if err == nil && dirInfo.ModTime().Add(resyncInterval).After(time.Now()) {
@@ -213,7 +218,7 @@ func (l *ContainerLister) Update() error {
 			continue
 		}
 		usage.PodUID = podUID
-		usage.ContainerName = strings.Split(entry.Name(), "_")[1]
+		usage.ContainerName = containerName
 		l.containers[entry.Name()] = usage
 		klog.Infof("Adding ctr dirname %s in monitorpath", dirName)
 	}
