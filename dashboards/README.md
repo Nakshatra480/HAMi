@@ -81,4 +81,11 @@ on the metrics port; the scheduler and the vGPU monitor each expose a subset):
 > `hami_host_gpu_utilization_ratio` and `hami_container_device_utilization_ratio`
 > carry 0-100 and their panels use the Grafana `percent` unit.
 > `hami_node_gpu_memory_allocated_ratio` carries 0-1 and its panel uses
-> `percentunit`, which multiplies by 100 for display.
+> `percentunit`, which multiplies by 100 for display. The full list of units is
+> in [docs/metrics.md](../docs/metrics.md), which is generated from
+> `pkg/metrics/catalog` so it cannot drift away from the code.
+>
+> `TestShippedDashboardPanelUnitsMatchDeclaredUnits` in that package checks this
+> dashboard against those declared units, so a panel that plots a metric on the
+> wrong scale fails the build rather than shipping a graph that reads 100 times
+> too small.
