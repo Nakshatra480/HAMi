@@ -949,6 +949,9 @@ func (s *Scheduler) Bind(args extenderv1.ExtenderBindingArgs) (*extenderv1.Exten
 	klog.InfoS("Attempting to bind pod to node", "pod", args.PodName, "namespace", args.PodNamespace, "node", args.Node)
 	var res *extenderv1.ExtenderBindingResult
 
+	reason := ReasonNone
+	defer func() { observeBind(reason) }()
+
 	binding := &corev1.Binding{
 		ObjectMeta: metav1.ObjectMeta{Name: args.PodName, UID: args.PodUID},
 		Target:     corev1.ObjectReference{Kind: "Node", Name: args.Node},
@@ -957,6 +960,7 @@ func (s *Scheduler) Bind(args extenderv1.ExtenderBindingArgs) (*extenderv1.Exten
 	current, err := s.podLister.Pods(args.PodNamespace).Get(args.PodName)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get pod from cache", "pod", args.PodName, "namespace", args.PodNamespace)
+		reason = ReasonPodNotFound
 		s.cleanupStalePodAllocation(&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				UID:       args.PodUID,
@@ -972,6 +976,7 @@ func (s *Scheduler) Bind(args extenderv1.ExtenderBindingArgs) (*extenderv1.Exten
 	node, err := s.nodeLister.Get(args.Node)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get node from cache", "node", args.Node)
+		reason = ReasonNodeNotFound
 		s.recordScheduleBindingResultEvent(current, EventReasonBindingFailed, []string{}, fmt.Errorf("failed to get node %s", args.Node))
 		s.cleanupStalePodAllocation(current)
 		res = &extenderv1.ExtenderBindingResult{Error: err.Error()}
@@ -996,16 +1001,19 @@ func (s *Scheduler) Bind(args extenderv1.ExtenderBindingArgs) (*extenderv1.Exten
 
 	if err = s.acquireNodeLocks(node, current); err != nil {
 		klog.ErrorS(err, "Failed to lock node", "node", args.Node, "pod", klog.KObj(current))
+		reason = ReasonNodeLocked
 		return fail(err)
 	}
 
 	if err = util.PatchPodAnnotations(current, tmppatch); err != nil {
 		klog.ErrorS(err, "Failed to patch pod annotations", "pod", klog.KObj(current))
+		reason = ReasonAnnotationsRejected
 		return fail(err)
 	}
 
 	if err = s.kubeClient.CoreV1().Pods(args.PodNamespace).Bind(context.Background(), binding, metav1.CreateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to bind pod", "pod", args.PodName, "namespace", args.PodNamespace, "node", args.Node)
+		reason = ReasonBindRejected
 		return fail(err)
 	}
 
@@ -1016,6 +1024,11 @@ func (s *Scheduler) Bind(args extenderv1.ExtenderBindingArgs) (*extenderv1.Exten
 
 func (s *Scheduler) Filter(args extenderv1.ExtenderArgs) (*extenderv1.ExtenderFilterResult, error) {
 	klog.InfoS("Starting schedule filter process", "pod", args.Pod.Name, "uuid", args.Pod.UID, "namespace", args.Pod.Namespace)
+
+	start := time.Now()
+	reason := ReasonNone
+	defer func() { observeFilter(reason, time.Since(start)) }()
+
 	resourceReqs := device.Resourcereqs(args.Pod)
 
 	hasHAMiResource := false
@@ -1029,6 +1042,7 @@ func (s *Scheduler) Filter(args extenderv1.ExtenderArgs) (*extenderv1.ExtenderFi
 
 	if !hasHAMiResource {
 		klog.V(1).InfoS("Pod does not request any resources", "pod", args.Pod.Name)
+		reason = ReasonNoHAMiResource
 		return &extenderv1.ExtenderFilterResult{
 			NodeNames:   args.NodeNames,
 			FailedNodes: nil,
@@ -1036,6 +1050,9 @@ func (s *Scheduler) Filter(args extenderv1.ExtenderArgs) (*extenderv1.ExtenderFi
 		}, nil
 	}
 	if args.Nodes != nil {
+		// Simulation answers a what-if question rather than placing the pod,
+		// so its outcomes are counted apart from real scheduling decisions.
+		reason = ReasonSimulation
 		return s.filterSimulation(args, resourceReqs)
 	}
 
@@ -1044,6 +1061,7 @@ func (s *Scheduler) Filter(args extenderv1.ExtenderArgs) (*extenderv1.ExtenderFi
 	}
 	nodeUsage, _, failedNodes, err := s.getNodesUsage(args.NodeNames, args.Pod)
 	if err != nil {
+		reason = ReasonNodeUsageFailed
 		s.recordScheduleFilterResultEvent(args.Pod, EventReasonFilteringFailed, "", err)
 		return nil, err
 	}
@@ -1053,11 +1071,13 @@ func (s *Scheduler) Filter(args extenderv1.ExtenderArgs) (*extenderv1.ExtenderFi
 	nodeScores, err := s.calcScore(nodeUsage, resourceReqs, args.Pod, failedNodes)
 	if err != nil {
 		err := fmt.Errorf("calcScore failed %v for pod %v", err, args.Pod.Name)
+		reason = ReasonScoreFailed
 		s.recordScheduleFilterResultEvent(args.Pod, EventReasonFilteringFailed, "", err)
 		return nil, err
 	}
 	if len((*nodeScores).NodeList) == 0 {
 		klog.V(4).InfoS("No available nodes meet the required scores", "pod", args.Pod.Name)
+		reason = ReasonNoFittingNode
 		s.recordScheduleFilterResultEvent(args.Pod, EventReasonFilteringFailed, "", fmt.Errorf("no available node, %d nodes do not meet", len(*args.NodeNames)))
 		return &extenderv1.ExtenderFilterResult{
 			FailedNodes: failedNodes,
@@ -1088,6 +1108,7 @@ func (s *Scheduler) Filter(args extenderv1.ExtenderArgs) (*extenderv1.ExtenderFi
 		}
 		err = util.PatchPodAnnotations(args.Pod, annotations)
 		if err != nil {
+			reason = ReasonAnnotationsRejected
 			s.recordScheduleFilterResultEvent(args.Pod, EventReasonFilteringFailed, "", err)
 			if added {
 				s.quotaManager.RmUsage(args.Pod, effectiveDevices)

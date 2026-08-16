@@ -52,6 +52,9 @@ type ClusterManagerCollector struct {
 
 const normalizedCoreLimit = 100
 
+// metricsZone is the value of the zone label every scheduler series carries.
+const metricsZone = "vGPU"
+
 // normalizeAMDCoreMetrics converts AMD physical CU counts to the percentage
 // unit used by HAMi's core ratio metrics. Other devices keep their existing
 // metric values.
@@ -405,7 +408,10 @@ func initMetrics(bindAddress string, metricsProvider schedulerMetricsProvider, l
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(versionmetrics.NewBuildInfoCollector())
 
-	NewClusterManager("vGPU", reg, metricsProvider, legacyMetrics)
+	NewClusterManager(metricsZone, reg, metricsProvider, legacyMetrics)
+	// The extender's own counters go through the same wrapper the collector
+	// uses, so every series the scheduler exports carries the same zone label.
+	schedulerpkg.RegisterMetrics(prometheus.WrapRegistererWith(prometheus.Labels{"zone": metricsZone}, reg))
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))

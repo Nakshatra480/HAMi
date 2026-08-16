@@ -53,6 +53,8 @@ specific Prometheus UID — Grafana asks which data source to bind on import.
   core allocation ratios, and per-device shared count.
 - **vGPU / container workloads** — per-container vGPU memory used vs limit,
   container utilization, memory used as a % of limit, and a top-10 table.
+- **Scheduling outcomes** — filter and bind decision rates by outcome, filter
+  failures broken down by reason, and filter latency at p50 and p99.
 
 ## Metrics used
 
@@ -71,6 +73,9 @@ on the metrics port; the scheduler and the vGPU monitor each expose a subset):
 | `hami_vgpu_memory_used_bytes` | vGPU monitor | Per-container vGPU memory used. |
 | `hami_vgpu_memory_limit_bytes` | vGPU monitor | Per-container vGPU memory limit. |
 | `hami_container_device_utilization_ratio` | vGPU monitor | Per-container utilization (0-100). |
+| `hami_scheduler_filter_total` | scheduler | Filter decisions by `result` and `reason`. |
+| `hami_scheduler_bind_total` | scheduler | Bind decisions by `result` and `reason`. |
+| `hami_scheduler_filter_duration_seconds` | scheduler | Filter request latency histogram. |
 
 > The `_ratio` suffix does not imply one scale. `hami_gpu_core_allocated_ratio`,
 > `hami_host_gpu_utilization_ratio` and `hami_container_device_utilization_ratio`
