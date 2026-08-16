@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -34,10 +35,10 @@ import (
 	"github.com/Project-HAMi/HAMi/pkg/scheduler/policy"
 )
 
-// gatherSchedulerMetrics registers the scheduler's collectors the same way
-// initMetrics does, including the zone wrapper, and returns one entry per
-// exported metric family holding its sorted label names.
-func gatherSchedulerMetrics(t *testing.T) map[string][]string {
+// newSchedulerRegistry wires up the scheduler's collectors exactly the way
+// initMetrics does, including the zone wrapper, over a fixture that exercises
+// every branch of the collector.
+func newSchedulerRegistry(t *testing.T) *prometheus.Registry {
 	t.Helper()
 
 	// A device in each mode, so that the MIG branch of collectNodeMetrics runs
@@ -96,7 +97,15 @@ func gatherSchedulerMetrics(t *testing.T) map[string][]string {
 	)
 	schedulerpkg.RegisterMetrics(wrapped)
 
-	families, err := reg.Gather()
+	return reg
+}
+
+// gatherSchedulerMetrics scrapes that registry and returns one entry per
+// exported metric family holding its sorted label names.
+func gatherSchedulerMetrics(t *testing.T) map[string][]string {
+	t.Helper()
+
+	families, err := newSchedulerRegistry(t).Gather()
 	if err != nil {
 		t.Fatalf("gather: %v", err)
 	}
@@ -111,6 +120,32 @@ func gatherSchedulerMetrics(t *testing.T) map[string][]string {
 		got[family.GetName()] = labels
 	}
 	return got
+}
+
+// knownLintExceptions are Prometheus naming problems that predate this branch.
+// They are listed rather than silenced so that the check still fails if a new
+// metric adds to them, and so the list itself is a to-do a maintainer can see.
+var knownLintExceptions = map[string]string{
+	"hami_gpu_shared_count": `non-histogram and non-summary metrics should not have "_count" suffix`,
+}
+
+func TestSchedulerMetricsPassPrometheusLint(t *testing.T) {
+	// promlint is the Prometheus project's own view of whether a metric is
+	// named and documented conventionally. Running it here means a new metric
+	// is judged by that standard at review time rather than after someone has
+	// already built a dashboard on it.
+	problems, err := promtestutil.GatherAndLint(newSchedulerRegistry(t))
+	if err != nil {
+		t.Fatalf("lint: %v", err)
+	}
+
+	for _, problem := range problems {
+		if known, ok := knownLintExceptions[problem.Metric]; ok && known == problem.Text {
+			t.Logf("known, pre-existing: %s: %s", problem.Metric, problem.Text)
+			continue
+		}
+		t.Errorf("%s: %s", problem.Metric, problem.Text)
+	}
 }
 
 func TestSchedulerExportsExactlyTheCatalogMetrics(t *testing.T) {

@@ -83,6 +83,18 @@ func TestMetricNamesIn(t *testing.T) {
 			expr: `histogram_quantile(0.99, sum by (le) (rate(hami_scheduler_filter_duration_seconds_bucket[5m])))`,
 			want: []string{"hami_scheduler_filter_duration_seconds_bucket"},
 		},
+		{
+			// An offset duration sits outside any bracket, so stripping range
+			// selectors alone leaves its unit letter looking like a metric.
+			name: "an unbracketed duration is not a metric name",
+			expr: `hami_gpu_shared_count offset 5m`,
+			want: []string{"hami_gpu_shared_count"},
+		},
+		{
+			name: "a comparison against a plain number keeps only the metric",
+			expr: `avg_over_time(hami_host_gpu_utilization_ratio[1h]) > bool 90`,
+			want: []string{"hami_host_gpu_utilization_ratio"},
+		},
 	}
 
 	for _, tt := range tests {

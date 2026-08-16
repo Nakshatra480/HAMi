@@ -24,34 +24,34 @@ import (
 
 // Results a scheduling phase can end in.
 const (
-	// ResultSucceeded means the phase did what it was asked to do.
-	ResultSucceeded = "succeeded"
-	// ResultFailed means the phase could not place or bind the pod.
-	ResultFailed = "failed"
-	// ResultSkipped means the phase returned without making a decision, so
+	// resultSucceeded means the phase did what it was asked to do.
+	resultSucceeded = "succeeded"
+	// resultFailed means the phase could not place or bind the pod.
+	resultFailed = "failed"
+	// resultSkipped means the phase returned without making a decision, so
 	// counting it as either of the other two would distort a success rate.
-	ResultSkipped = "skipped"
+	resultSkipped = "skipped"
 )
 
 // Reasons the filter phase ends on. The set is closed so that the reason label
 // cannot grow with cluster size: a reason describes the code path, never the
 // pod, node or device that went through it.
 const (
-	ReasonNone                = "none"
-	ReasonNoHAMiResource      = "no_hami_resource"
-	ReasonSimulation          = "simulation"
-	ReasonNodeUsageFailed     = "node_usage_failed"
-	ReasonScoreFailed         = "score_failed"
-	ReasonNoFittingNode       = "no_fitting_node"
-	ReasonAnnotationsRejected = "annotations_rejected"
+	reasonNone                = "none"
+	reasonNoHAMiResource      = "no_hami_resource"
+	reasonSimulation          = "simulation"
+	reasonNodeUsageFailed     = "node_usage_failed"
+	reasonScoreFailed         = "score_failed"
+	reasonNoFittingNode       = "no_fitting_node"
+	reasonAnnotationsRejected = "annotations_rejected"
 )
 
 // Reasons the bind phase ends on.
 const (
-	ReasonPodNotFound  = "pod_not_found"
-	ReasonNodeNotFound = "node_not_found"
-	ReasonNodeLocked   = "node_lock_failed"
-	ReasonBindRejected = "bind_rejected"
+	reasonPodNotFound  = "pod_not_found"
+	reasonNodeNotFound = "node_not_found"
+	reasonNodeLocked   = "node_lock_failed"
+	reasonBindRejected = "bind_rejected"
 )
 
 var (
@@ -89,21 +89,21 @@ var (
 // are also what the metrics are pre-initialised from.
 var (
 	filterReasons = []string{
-		ReasonNone,
-		ReasonNoHAMiResource,
-		ReasonSimulation,
-		ReasonNodeUsageFailed,
-		ReasonScoreFailed,
-		ReasonNoFittingNode,
-		ReasonAnnotationsRejected,
+		reasonNone,
+		reasonNoHAMiResource,
+		reasonSimulation,
+		reasonNodeUsageFailed,
+		reasonScoreFailed,
+		reasonNoFittingNode,
+		reasonAnnotationsRejected,
 	}
 	bindReasons = []string{
-		ReasonNone,
-		ReasonPodNotFound,
-		ReasonNodeNotFound,
-		ReasonNodeLocked,
-		ReasonAnnotationsRejected,
-		ReasonBindRejected,
+		reasonNone,
+		reasonPodNotFound,
+		reasonNodeNotFound,
+		reasonNodeLocked,
+		reasonAnnotationsRejected,
+		reasonBindRejected,
 	}
 )
 
@@ -127,7 +127,7 @@ func RegisterMetrics(reg prometheus.Registerer) {
 	for _, reason := range bindReasons {
 		bindTotal.WithLabelValues(resultFor(reason), reason)
 	}
-	for _, result := range []string{ResultSucceeded, ResultFailed, ResultSkipped} {
+	for _, result := range []string{resultSucceeded, resultFailed, resultSkipped} {
 		filterDuration.WithLabelValues(result)
 	}
 }
@@ -136,12 +136,12 @@ func RegisterMetrics(reg prometheus.Registerer) {
 // one place stops a new reason from being counted as a success by accident.
 func resultFor(reason string) string {
 	switch reason {
-	case ReasonNone:
-		return ResultSucceeded
-	case ReasonNoHAMiResource, ReasonSimulation:
-		return ResultSkipped
+	case reasonNone:
+		return resultSucceeded
+	case reasonNoHAMiResource, reasonSimulation:
+		return resultSkipped
 	default:
-		return ResultFailed
+		return resultFailed
 	}
 }
 

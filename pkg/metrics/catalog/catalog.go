@@ -395,20 +395,31 @@ var metrics = []Metric{
 	},
 }
 
-// index is built once so Lookup does not walk the slice on every call.
-var index = func() map[string]Metric {
-	m := make(map[string]Metric, len(metrics))
-	for _, entry := range metrics {
-		m[entry.Name] = entry
-	}
-	return m
-}()
+// index and byName are built once, so Lookup does not walk the slice and All
+// does not re-sort it on every call. The declaration above is grouped by
+// component to read well; callers want it by name.
+var (
+	index = func() map[string]Metric {
+		m := make(map[string]Metric, len(metrics))
+		for _, entry := range metrics {
+			m[entry.Name] = entry
+		}
+		return m
+	}()
 
-// All returns every declared metric, sorted by name.
+	byName = func() []Metric {
+		out := make([]Metric, len(metrics))
+		copy(out, metrics)
+		sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+		return out
+	}()
+)
+
+// All returns every declared metric, sorted by name. The result is a copy, so a
+// caller cannot reorder or corrupt the declaration.
 func All() []Metric {
-	out := make([]Metric, len(metrics))
-	copy(out, metrics)
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	out := make([]Metric, len(byName))
+	copy(out, byName)
 	return out
 }
 

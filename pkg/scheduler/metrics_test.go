@@ -47,17 +47,17 @@ func registerSchedulingMetrics(t *testing.T) *prometheus.Registry {
 
 func TestResultForMapsEveryReason(t *testing.T) {
 	tests := map[string]string{
-		ReasonNone:                ResultSucceeded,
-		ReasonNoHAMiResource:      ResultSkipped,
-		ReasonSimulation:          ResultSkipped,
-		ReasonNodeUsageFailed:     ResultFailed,
-		ReasonScoreFailed:         ResultFailed,
-		ReasonNoFittingNode:       ResultFailed,
-		ReasonAnnotationsRejected: ResultFailed,
-		ReasonPodNotFound:         ResultFailed,
-		ReasonNodeNotFound:        ResultFailed,
-		ReasonNodeLocked:          ResultFailed,
-		ReasonBindRejected:        ResultFailed,
+		reasonNone:                resultSucceeded,
+		reasonNoHAMiResource:      resultSkipped,
+		reasonSimulation:          resultSkipped,
+		reasonNodeUsageFailed:     resultFailed,
+		reasonScoreFailed:         resultFailed,
+		reasonNoFittingNode:       resultFailed,
+		reasonAnnotationsRejected: resultFailed,
+		reasonPodNotFound:         resultFailed,
+		reasonNodeNotFound:        resultFailed,
+		reasonNodeLocked:          resultFailed,
+		reasonBindRejected:        resultFailed,
 	}
 
 	for reason, want := range tests {
@@ -68,8 +68,8 @@ func TestResultForMapsEveryReason(t *testing.T) {
 
 	// An unknown reason has to count as a failure. Treating it as a success
 	// would hide the outcome it was added to describe.
-	if got := resultFor("something_new"); got != ResultFailed {
-		t.Errorf("resultFor(unknown) = %q, want %q", got, ResultFailed)
+	if got := resultFor("something_new"); got != resultFailed {
+		t.Errorf("resultFor(unknown) = %q, want %q", got, resultFailed)
 	}
 }
 
@@ -93,18 +93,18 @@ func TestRegisterMetricsStartsEverySeriesAtZero(t *testing.T) {
 func TestObserveFilterCountsTheOutcomeAndTheDuration(t *testing.T) {
 	reg := registerSchedulingMetrics(t)
 
-	observeFilter(ReasonNone, 5*time.Millisecond)
-	observeFilter(ReasonNoFittingNode, 12*time.Millisecond)
-	observeFilter(ReasonNoFittingNode, 9*time.Millisecond)
+	observeFilter(reasonNone, 5*time.Millisecond)
+	observeFilter(reasonNoFittingNode, 12*time.Millisecond)
+	observeFilter(reasonNoFittingNode, 9*time.Millisecond)
 
-	if got := promtestutil.ToFloat64(filterTotal.WithLabelValues(ResultSucceeded, ReasonNone)); got != 1 {
+	if got := promtestutil.ToFloat64(filterTotal.WithLabelValues(resultSucceeded, reasonNone)); got != 1 {
 		t.Errorf("succeeded filters = %v, want 1", got)
 	}
-	if got := promtestutil.ToFloat64(filterTotal.WithLabelValues(ResultFailed, ReasonNoFittingNode)); got != 2 {
+	if got := promtestutil.ToFloat64(filterTotal.WithLabelValues(resultFailed, reasonNoFittingNode)); got != 2 {
 		t.Errorf("filters with no fitting node = %v, want 2", got)
 	}
 	// A skipped filter that never ran must not appear as a success.
-	if got := promtestutil.ToFloat64(filterTotal.WithLabelValues(ResultSkipped, ReasonNoHAMiResource)); got != 0 {
+	if got := promtestutil.ToFloat64(filterTotal.WithLabelValues(resultSkipped, reasonNoHAMiResource)); got != 0 {
 		t.Errorf("skipped filters = %v, want 0", got)
 	}
 
@@ -116,13 +116,13 @@ func TestObserveFilterCountsTheOutcomeAndTheDuration(t *testing.T) {
 func TestObserveBindCountsTheOutcome(t *testing.T) {
 	registerSchedulingMetrics(t)
 
-	observeBind(ReasonNone)
-	observeBind(ReasonNodeLocked)
+	observeBind(reasonNone)
+	observeBind(reasonNodeLocked)
 
-	if got := promtestutil.ToFloat64(bindTotal.WithLabelValues(ResultSucceeded, ReasonNone)); got != 1 {
+	if got := promtestutil.ToFloat64(bindTotal.WithLabelValues(resultSucceeded, reasonNone)); got != 1 {
 		t.Errorf("succeeded binds = %v, want 1", got)
 	}
-	if got := promtestutil.ToFloat64(bindTotal.WithLabelValues(ResultFailed, ReasonNodeLocked)); got != 1 {
+	if got := promtestutil.ToFloat64(bindTotal.WithLabelValues(resultFailed, reasonNodeLocked)); got != 1 {
 		t.Errorf("binds that lost the node lock = %v, want 1", got)
 	}
 }
@@ -136,23 +136,23 @@ func TestEveryReasonTheExtenderReportsIsPreInitialised(t *testing.T) {
 		t.Fatalf("read scheduler.go: %v", err)
 	}
 
-	assignments := regexp.MustCompile(`reason = (Reason\w+)`).FindAllStringSubmatch(string(source), -1)
+	assignments := regexp.MustCompile(`reason = (reason\w+)`).FindAllStringSubmatch(string(source), -1)
 	if len(assignments) == 0 {
 		t.Fatal("found no reason assignments in scheduler.go, the guard is not looking at the right thing")
 	}
 
 	known := map[string]string{
-		"ReasonNone":                ReasonNone,
-		"ReasonNoHAMiResource":      ReasonNoHAMiResource,
-		"ReasonSimulation":          ReasonSimulation,
-		"ReasonNodeUsageFailed":     ReasonNodeUsageFailed,
-		"ReasonScoreFailed":         ReasonScoreFailed,
-		"ReasonNoFittingNode":       ReasonNoFittingNode,
-		"ReasonAnnotationsRejected": ReasonAnnotationsRejected,
-		"ReasonPodNotFound":         ReasonPodNotFound,
-		"ReasonNodeNotFound":        ReasonNodeNotFound,
-		"ReasonNodeLocked":          ReasonNodeLocked,
-		"ReasonBindRejected":        ReasonBindRejected,
+		"reasonNone":                reasonNone,
+		"reasonNoHAMiResource":      reasonNoHAMiResource,
+		"reasonSimulation":          reasonSimulation,
+		"reasonNodeUsageFailed":     reasonNodeUsageFailed,
+		"reasonScoreFailed":         reasonScoreFailed,
+		"reasonNoFittingNode":       reasonNoFittingNode,
+		"reasonAnnotationsRejected": reasonAnnotationsRejected,
+		"reasonPodNotFound":         reasonPodNotFound,
+		"reasonNodeNotFound":        reasonNodeNotFound,
+		"reasonNodeLocked":          reasonNodeLocked,
+		"reasonBindRejected":        reasonBindRejected,
 	}
 
 	for _, match := range assignments {

@@ -124,6 +124,7 @@ var (
 	stringLiteral  = regexp.MustCompile(`"[^"]*"|'[^']*'`)
 	modifierList   = regexp.MustCompile(`\b(by|without|on|ignoring|group_left|group_right)\s*\([^()]*\)`)
 	rangeSelector  = regexp.MustCompile(`\[[^\[\]]*\]`)
+	duration       = regexp.MustCompile(`\b\d+(\.\d+)?(ms|s|m|h|d|w|y)\b`)
 	identifier     = regexp.MustCompile(`[a-zA-Z_:][a-zA-Z0-9_:]*\s*\(?`)
 	bareSelectorRe = regexp.MustCompile(`^\s*([a-zA-Z_:][a-zA-Z0-9_:]*)\s*(\{[^{}]*\})?\s*(\[[^\[\]]*\])?\s*$`)
 )
@@ -155,9 +156,12 @@ func MetricNamesIn(expr string) []string {
 	cleaned := stringLiteral.ReplaceAllString(expr, `""`)
 	cleaned = modifierList.ReplaceAllString(cleaned, " ")
 	cleaned = labelMatcher.ReplaceAllString(cleaned, " ")
-	// After the label matchers go, a range selector like [5m] is all that is
-	// left holding a duration, and its unit letter reads as an identifier.
 	cleaned = rangeSelector.ReplaceAllString(cleaned, " ")
+	// A duration's unit letter reads as an identifier once the digits in front
+	// of it are skipped, so 5m in "offset 5m" would be reported as a metric
+	// named m. Range selectors are already gone by here; this catches the
+	// durations that are not bracketed.
+	cleaned = duration.ReplaceAllString(cleaned, " ")
 
 	seen := make(map[string]bool)
 	var out []string
