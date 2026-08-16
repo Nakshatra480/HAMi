@@ -29,6 +29,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Component is the HAMi binary that exports a metric.
@@ -100,8 +102,12 @@ type Metric struct {
 	Kind Kind
 	// Unit is the unit of the value, including its range.
 	Unit Unit
-	// Labels are the per-sample labels, excluding the wrapper labels every
-	// collector in the same registry adds. Sorted.
+	// Labels are the per-sample labels, excluding the wrapper labels the
+	// registering component adds.
+	//
+	// The order is the order the collector passes label values in, not
+	// alphabetical, because Desc and MustNewConstMetric match values to labels
+	// by position. Reordering this list silently relabels every sample.
 	Labels []string
 	// Help is the HELP string the collector emits.
 	Help string
@@ -148,7 +154,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitPercent,
-		Labels:      []string{"device_index", "device_type", "device_uuid", "node"},
+		Labels:      []string{"node", "device_uuid", "device_index", "device_type"},
 		Help:        "Device core allocated for a certain GPU",
 		Cardinality: "One series per physical device.",
 		Example:     `hami_gpu_core_allocated_ratio > 80`,
@@ -158,7 +164,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitPercent,
-		Labels:      []string{"device_index", "device_type", "device_uuid", "node"},
+		Labels:      []string{"node", "device_uuid", "device_index", "device_type"},
 		Help:        "Device core limit for a certain GPU",
 		Cardinality: "One series per physical device.",
 		Example:     `hami_gpu_core_limit_ratio - hami_gpu_core_allocated_ratio`,
@@ -168,7 +174,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"device_cores", "device_index", "device_type", "device_uuid", "node"},
+		Labels:      []string{"node", "device_uuid", "device_index", "device_cores", "device_type"},
 		Help:        "Device memory allocated for a certain GPU",
 		Cardinality: "One series per physical device.",
 		Example:     `sum by (node) (hami_gpu_memory_allocated_bytes)`,
@@ -178,7 +184,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"device_index", "device_type", "device_uuid", "node"},
+		Labels:      []string{"node", "device_uuid", "device_index", "device_type"},
 		Help:        "Device memory limit for a certain GPU",
 		Cardinality: "One series per physical device.",
 		Example:     `sum(hami_gpu_memory_limit_bytes)`,
@@ -188,7 +194,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitCount,
-		Labels:      []string{"device_index", "device_type", "device_uuid", "node"},
+		Labels:      []string{"node", "device_uuid", "device_index", "device_type"},
 		Help:        "Number of containers sharing this GPU",
 		Cardinality: "One series per physical device.",
 		Example:     `topk(10, hami_gpu_shared_count)`,
@@ -198,7 +204,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitRatio,
-		Labels:      []string{"device_index", "device_uuid", "node"},
+		Labels:      []string{"node", "device_uuid", "device_index"},
 		Help:        "GPU Memory Allocated Percentage on a certain GPU",
 		Cardinality: "One series per physical device.",
 		Example:     `100 * hami_node_gpu_memory_allocated_ratio > 90`,
@@ -208,7 +214,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitInfo,
-		Labels:      []string{"compute_instance_id", "device_index", "device_uuid", "gpu_instance_id", "mig_uuid", "node", "placement_size", "placement_start", "profile"},
+		Labels:      []string{"node", "device_uuid", "device_index", "mig_uuid", "profile", "gpu_instance_id", "compute_instance_id", "placement_start", "placement_size"},
 		Help:        "Realized MIG instance identity and scheduler placement",
 		Cardinality: "One series per realized MIG instance. Zero on clusters not using MIG.",
 		Example:     `count by (profile) (hami_node_gpu_mig_instance_info)`,
@@ -218,7 +224,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"device_cores", "device_index", "device_memory_limit", "device_type", "device_uuid", "node"},
+		Labels:      []string{"node", "device_uuid", "device_index", "device_cores", "device_memory_limit", "device_type"},
 		Help:        "GPU overview on a certain node",
 		Cardinality: "One series per physical device, but device_cores and device_memory_limit carry values in labels, so a device whose capacity changes leaves a stale series behind.",
 		Example:     `hami_node_gpu_overview`,
@@ -228,7 +234,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitCount,
-		Labels:      []string{"limit", "namespace", "quota_name"},
+		Labels:      []string{"namespace", "quota_name", "limit"},
 		Help:        "resourcequota usage for a certain device",
 		Cardinality: "One series per namespace and quota name.",
 		Example:     `hami_resource_quota_used`,
@@ -238,7 +244,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindCounter,
 		Unit:        UnitCount,
-		Labels:      []string{"reason", "result"},
+		Labels:      []string{"result", "reason"},
 		Help:        "Bind requests handled by the scheduler extender, by outcome",
 		Cardinality: "One series per result and reason pair. The reason set is closed, so this does not grow with the cluster.",
 		Example:     `sum(rate(hami_scheduler_bind_total{result="failed"}[5m])) by (reason)`,
@@ -258,7 +264,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindCounter,
 		Unit:        UnitCount,
-		Labels:      []string{"reason", "result"},
+		Labels:      []string{"result", "reason"},
 		Help:        "Filter requests handled by the scheduler extender, by outcome",
 		Cardinality: "One series per result and reason pair. The reason set is closed, so this does not grow with the cluster.",
 		Example:     `sum(rate(hami_scheduler_filter_total{result="failed"}[5m])) by (reason)`,
@@ -268,7 +274,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitPercent,
-		Labels:      []string{"container_index", "device_uuid", "namespace", "node", "pod"},
+		Labels:      []string{"namespace", "node", "pod", "container_index", "device_uuid"},
 		Help:        "vGPU core allocated from a container",
 		Cardinality: "One series per container and device. Grows with pod churn.",
 		Example:     `sum by (namespace) (hami_vgpu_core_allocated_ratio)`,
@@ -278,7 +284,7 @@ var metrics = []Metric{
 		Component:   ComponentScheduler,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"container_index", "device_uuid", "namespace", "node", "pod"},
+		Labels:      []string{"namespace", "node", "pod", "container_index", "device_uuid"},
 		Help:        "vGPU memory allocated from a container",
 		Cardinality: "One series per container and device. Grows with pod churn.",
 		Example:     `sum by (namespace) (hami_vgpu_memory_allocated_bytes)`,
@@ -288,7 +294,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"container", "device_uuid", "namespace", "pod", "vdevice_index"},
+		Labels:      []string{"namespace", "pod", "container", "vdevice_index", "device_uuid"},
 		Help:        "Container device memory usage in bytes",
 		Cardinality: "One series per container and vdevice. Carries the same value as hami_vgpu_memory_used_bytes.",
 		Example:     `hami_container_device_memory_bytes`,
@@ -298,7 +304,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitPercent,
-		Labels:      []string{"container", "device_uuid", "namespace", "pod", "vdevice_index"},
+		Labels:      []string{"namespace", "pod", "container", "vdevice_index", "device_uuid"},
 		Help:        "Container device SM utilization ratio",
 		Cardinality: "One series per container and vdevice.",
 		Example:     `avg by (namespace, pod) (hami_container_device_utilization_ratio)`,
@@ -308,7 +314,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitSeconds,
-		Labels:      []string{"container", "device_uuid", "namespace", "pod", "vdevice_index"},
+		Labels:      []string{"namespace", "pod", "container", "vdevice_index", "device_uuid"},
 		Help:        "Seconds since last kernel execution in container",
 		Cardinality: "One series per container and vdevice that has run at least one kernel.",
 		Example:     `hami_container_last_kernel_elapsed_seconds > 3600`,
@@ -318,7 +324,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"device_index", "device_type", "device_uuid"},
+		Labels:      []string{"device_index", "device_uuid", "device_type"},
 		Help:        "GPU device memory usage in bytes",
 		Cardinality: "One series per physical device on the node.",
 		Example:     `hami_host_gpu_memory_used_bytes`,
@@ -328,7 +334,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitPercent,
-		Labels:      []string{"device_index", "device_type", "device_uuid"},
+		Labels:      []string{"device_index", "device_uuid", "device_type"},
 		Help:        "GPU core utilization ratio (0-100)",
 		Cardinality: "One series per physical device on the node.",
 		Example:     `avg_over_time(hami_host_gpu_utilization_ratio[1h])`,
@@ -338,7 +344,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitInfo,
-		Labels:      []string{"compute_instance_id", "container", "device_uuid", "gpu_instance_id", "mig_uuid", "namespace", "pod", "profile", "vdevice_index"},
+		Labels:      []string{"namespace", "pod", "container", "vdevice_index", "device_uuid", "mig_uuid", "profile", "gpu_instance_id", "compute_instance_id"},
 		Help:        "MIG runtime identity for a container allocation",
 		Cardinality: "One series per container MIG allocation. Zero on clusters not using MIG.",
 		Example:     `hami_mig_device_info`,
@@ -348,7 +354,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"container", "device_uuid", "namespace", "pod", "vdevice_index"},
+		Labels:      []string{"namespace", "pod", "container", "vdevice_index", "device_uuid"},
 		Help:        "Container device memory buffer size in bytes",
 		Cardinality: "One series per container and vdevice.",
 		Example:     `hami_vgpu_memory_buffer_bytes`,
@@ -358,7 +364,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"container", "device_uuid", "namespace", "pod", "vdevice_index"},
+		Labels:      []string{"namespace", "pod", "container", "vdevice_index", "device_uuid"},
 		Help:        "Container device memory context size in bytes",
 		Cardinality: "One series per container and vdevice.",
 		Example:     `hami_vgpu_memory_context_bytes`,
@@ -368,7 +374,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"container", "device_uuid", "namespace", "pod", "vdevice_index"},
+		Labels:      []string{"namespace", "pod", "container", "vdevice_index", "device_uuid"},
 		Help:        "vGPU device memory limit in bytes",
 		Cardinality: "One series per container and vdevice.",
 		Example:     `hami_vgpu_memory_used_bytes / hami_vgpu_memory_limit_bytes`,
@@ -378,7 +384,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"container", "device_uuid", "namespace", "pod", "vdevice_index"},
+		Labels:      []string{"namespace", "pod", "container", "vdevice_index", "device_uuid"},
 		Help:        "Container device memory module size in bytes",
 		Cardinality: "One series per container and vdevice.",
 		Example:     `hami_vgpu_memory_module_bytes`,
@@ -388,7 +394,7 @@ var metrics = []Metric{
 		Component:   ComponentMonitor,
 		Kind:        KindGauge,
 		Unit:        UnitBytes,
-		Labels:      []string{"container", "device_uuid", "namespace", "pod", "vdevice_index"},
+		Labels:      []string{"namespace", "pod", "container", "vdevice_index", "device_uuid"},
 		Help:        "vGPU device memory usage in bytes",
 		Cardinality: "One series per container and vdevice.",
 		Example:     `topk(10, hami_vgpu_memory_used_bytes)`,
@@ -473,8 +479,8 @@ func Names(c Component) []string {
 }
 
 // Validate reports the declaration errors that the catalog can check about
-// itself: duplicate names, missing fields, and labels that are not sorted or
-// that collide with a wrapper label.
+// itself: duplicate names, missing fields, repeated labels, and labels that
+// collide with a wrapper label.
 func Validate() error {
 	seen := make(map[string]bool, len(metrics))
 	for _, entry := range metrics {
@@ -498,14 +504,35 @@ func Validate() error {
 			return fmt.Errorf("metric %q has no example query", entry.Name)
 		}
 
-		if !sort.StringsAreSorted(entry.Labels) {
-			return fmt.Errorf("metric %q has unsorted labels %v", entry.Name, entry.Labels)
-		}
+		seenLabel := make(map[string]bool, len(entry.Labels))
 		for _, label := range entry.Labels {
 			if slices.Contains(WrapperLabels, label) {
 				return fmt.Errorf("metric %q declares wrapper label %q", entry.Name, label)
 			}
+			if seenLabel[label] {
+				return fmt.Errorf("metric %q declares label %q twice", entry.Name, label)
+			}
+			seenLabel[label] = true
 		}
 	}
 	return nil
+}
+
+// MustDesc returns the Prometheus descriptor for a declared metric, and panics
+// if the name is not declared.
+//
+// Building descriptors here rather than from a literal at the collector is what
+// stops the catalog from being a second opinion: a metric that is not declared
+// cannot be described, so it cannot be emitted. It panics rather than returning
+// an error because every caller is package-level initialisation, where a
+// missing declaration is a programming mistake and not a runtime condition.
+func MustDesc(name string) *prometheus.Desc {
+	entry, ok := Lookup(name)
+	if !ok {
+		panic(fmt.Sprintf("metrics catalog: %q is not declared, add it to pkg/metrics/catalog", name))
+	}
+	if entry.Kind != KindGauge {
+		panic(fmt.Sprintf("metrics catalog: %q is a %s, which is built with its own constructor rather than a Desc", name, entry.Kind))
+	}
+	return prometheus.NewDesc(entry.Name, entry.Help, entry.Labels, nil)
 }

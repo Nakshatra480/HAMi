@@ -17,6 +17,10 @@ limitations under the License.
 package main
 
 import (
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -24,6 +28,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -34,6 +39,8 @@ import (
 	schedulerpkg "github.com/Project-HAMi/HAMi/pkg/scheduler"
 	"github.com/Project-HAMi/HAMi/pkg/scheduler/policy"
 )
+
+var updateGolden = flag.Bool("update-golden", false, "rewrite the golden scrape in cmd/scheduler/testdata")
 
 // newSchedulerRegistry wires up the scheduler's collectors exactly the way
 // initMetrics does, including the zone wrapper, over a fixture that exercises
@@ -242,5 +249,79 @@ func TestSchedulerRatioMetricsAreOnTheirDeclaredScale(t *testing.T) {
 					family.GetName(), m.Unit, got, wantValue)
 			}
 		}
+	}
+}
+
+// formatFamilies renders a scrape the way a golden file can be compared
+// against: one line per sample, labels in name order with their values.
+//
+// It is written here rather than taken from expfmt so that the branch adds no
+// direct dependency. Labels are printed with their values attached, which is
+// what makes this catch a reordering of a metric's declared label list: the
+// names stay the same and the values move between them.
+func formatFamilies(families []*dto.MetricFamily) string {
+	var b strings.Builder
+	for _, family := range families {
+		// Build info carries the Go version, platform and revision of whoever
+		// ran the test, so it cannot be pinned in a file shared across
+		// machines. Its labels are constant and cannot be reordered anyway.
+		if family.GetName() == "hami_build_info" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			pairs := make([]string, 0, len(metric.GetLabel()))
+			for _, label := range metric.GetLabel() {
+				pairs = append(pairs, fmt.Sprintf("%s=%q", label.GetName(), label.GetValue()))
+			}
+			sort.Strings(pairs)
+
+			var value float64
+			switch {
+			case metric.GetGauge() != nil:
+				value = metric.GetGauge().GetValue()
+			case metric.GetCounter() != nil:
+				value = metric.GetCounter().GetValue()
+			case metric.GetHistogram() != nil:
+				value = float64(metric.GetHistogram().GetSampleCount())
+			}
+			fmt.Fprintf(&b, "%s{%s} %g\n", family.GetName(), strings.Join(pairs, ","), value)
+		}
+	}
+	return b.String()
+}
+
+func TestSchedulerScrapeMatchesGolden(t *testing.T) {
+	// The catalog stores each metric's labels in the order the collector passes
+	// values, because Desc matches the two by position. Nothing about that is
+	// visible in a set comparison: swapping two names in the declaration keeps
+	// the same label set and silently moves the values between them. This
+	// golden holds the pairing itself.
+	families, err := newSchedulerRegistry(t).Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+	got := formatFamilies(families)
+
+	path := filepath.Join("testdata", "scheduler_scrape.golden")
+	if *updateGolden {
+		if err := os.MkdirAll("testdata", 0o755); err != nil {
+			t.Fatalf("mkdir testdata: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+		t.Logf("wrote %s", path)
+		return
+	}
+
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if got != string(want) {
+		t.Errorf("scrape does not match %s.\n\ngot:\n%s\nwant:\n%s\n"+
+			"If this change is intended, regenerate with:\n"+
+			"  go test ./cmd/scheduler/ -run TestSchedulerScrapeMatchesGolden -update-golden",
+			path, got, want)
 	}
 }

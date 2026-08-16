@@ -26,11 +26,24 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/Project-HAMi/HAMi/pkg/metrics/catalog"
+	"github.com/Project-HAMi/HAMi/pkg/monitor/nvidia"
 )
 
+// descName pulls the metric name out of a descriptor.
+func descName(t *testing.T, desc *prometheus.Desc) string {
+	t.Helper()
+	fields := descFields.FindStringSubmatch(desc.String())
+	if fields == nil {
+		t.Fatalf("could not read the name out of %s", desc.String())
+	}
+	return fields[1]
+}
+
 // descFields pulls the name and the variable labels out of a descriptor's
-// string form. Neither is reachable through an exported field, and the monitor
-// cannot be scraped in a unit test because Collect needs a real NVML device.
+// string form, neither of which is reachable through an exported field. Collect
+// as a whole needs a real NVML device, so the descriptor checks below go
+// through Describe; the container half of Collect runs without one and is
+// checked directly.
 var descFields = regexp.MustCompile(`fqName: "([^"]+)".*variableLabels: \{([^}]*)\}`)
 
 // restoreLegacyDescriptors puts the package-level legacy descriptors back to
@@ -128,8 +141,12 @@ func TestMonitorMetricLabelsMatchTheCatalog(t *testing.T) {
 			continue // reported by TestMonitorDescribesExactlyTheCatalogMetrics
 		}
 		// Describe runs before the registry wrapper adds the zone label, so
-		// the descriptors carry the metric's own labels only.
-		want := m.Labels
+		// the descriptors carry the metric's own labels only. Both sides are
+		// sorted before comparing because the catalog stores labels in the
+		// order values are passed, not alphabetically; the order itself is
+		// covered by the golden scrape in cmd/scheduler.
+		want := append([]string(nil), m.Labels...)
+		sort.Strings(want)
 		if len(want) == 0 {
 			want = nil
 		}
@@ -149,6 +166,63 @@ func TestLegacyMetricsAreNotInTheCatalog(t *testing.T) {
 		}
 		if _, ok := catalog.Lookup(name); ok {
 			t.Errorf("legacy metric %q is declared in the catalog", name)
+		}
+	}
+}
+
+func TestMonitorContainerMetricsCarryTheDeclaredLabelValues(t *testing.T) {
+	// The catalog's label list is ordered, because a Desc matches label values
+	// to names by position. Describe only shows the names, so a reordered
+	// declaration passes the label check in this file while quietly attaching
+	// every value to the wrong name. Collecting real samples is what catches
+	// it, and the container path is the part of this collector that runs
+	// without a GPU.
+	metrics, err := collectContainer(t, &nvidia.ContainerUsage{Info: &stubInfo{
+		uuids:      []string{testUUID},
+		total:      []uint64{8000},
+		limit:      []uint64{10000},
+		ctxSize:    []uint64{1000},
+		modSize:    []uint64{500},
+		bufSize:    []uint64{300},
+		smUtil:     []uint64{42},
+		lastKernel: 100,
+	}}, 160)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if len(metrics) == 0 {
+		t.Fatal("the container path emitted nothing")
+	}
+
+	// collectContainer builds the pod, so these are the values each label has
+	// to end up holding.
+	want := map[string]string{
+		"namespace":     "team-a",
+		"pod":           "trainer-0",
+		"container":     "worker",
+		"vdevice_index": "0",
+		"device_uuid":   testUUID,
+	}
+
+	for _, metric := range metrics {
+		name := descName(t, metric.Desc())
+		entry, ok := catalog.Lookup(name)
+		if !ok {
+			t.Errorf("container path emitted %q, which the catalog does not declare", name)
+			continue
+		}
+		if entry.Component != catalog.ComponentMonitor {
+			t.Errorf("%s is declared under %s but the monitor emits it", name, entry.Component)
+		}
+
+		value, got := gaugeValue(t, metric)
+		for label, wantValue := range want {
+			if got[label] != wantValue {
+				t.Errorf("%s label %s = %q, want %q", name, label, got[label], wantValue)
+			}
+		}
+		if entry.Unit == catalog.UnitPercent && (value < 0 || value > 100) {
+			t.Errorf("%s is declared as percent but read %v", name, value)
 		}
 	}
 }

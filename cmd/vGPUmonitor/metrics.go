@@ -23,6 +23,7 @@ import (
 	"unicode/utf8"
 
 	nv "github.com/Project-HAMi/HAMi/pkg/device/nvidia"
+	"github.com/Project-HAMi/HAMi/pkg/metrics/catalog"
 	"github.com/Project-HAMi/HAMi/pkg/monitor/nvidia"
 	"github.com/Project-HAMi/HAMi/pkg/util"
 
@@ -54,67 +55,22 @@ type ClusterManagerCollector struct {
 // Descriptors used by the ClusterManagerCollector below.
 // Metric and label names follow Prometheus naming best practices:
 // https://prometheus.io/docs/practices/naming/
+// Descriptors for every metric this collector emits, built from the metric
+// catalog rather than from literals here. A metric that is not declared there
+// cannot be described, so it cannot be emitted, and the help text and label
+// order have one source instead of two.
 var (
-	hostGPUdesc = prometheus.NewDesc(
-		"hami_host_gpu_memory_used_bytes",
-		"GPU device memory usage in bytes",
-		[]string{"device_index", "device_uuid", "device_type"}, nil,
-	)
-
-	hostGPUUtilizationdesc = prometheus.NewDesc(
-		"hami_host_gpu_utilization_ratio",
-		"GPU core utilization ratio (0-100)",
-		[]string{"device_index", "device_uuid", "device_type"}, nil,
-	)
-
-	ctrvGPUdesc = prometheus.NewDesc(
-		"hami_vgpu_memory_used_bytes",
-		"vGPU device memory usage in bytes",
-		[]string{"namespace", "pod", "container", "vdevice_index", "device_uuid"}, nil,
-	)
-
-	ctrvGPUlimitdesc = prometheus.NewDesc(
-		"hami_vgpu_memory_limit_bytes",
-		"vGPU device memory limit in bytes",
-		[]string{"namespace", "pod", "container", "vdevice_index", "device_uuid"}, nil,
-	)
-	ctrDeviceMemorydesc = prometheus.NewDesc(
-		"hami_container_device_memory_bytes",
-		`Container device memory usage in bytes`,
-		[]string{"namespace", "pod", "container", "vdevice_index", "device_uuid"}, nil,
-	)
-	ctrDeviceUtilizationdesc = prometheus.NewDesc(
-		"hami_container_device_utilization_ratio",
-		"Container device SM utilization ratio",
-		[]string{"namespace", "pod", "container", "vdevice_index", "device_uuid"}, nil,
-	)
-	ctrDeviceLastKernelDesc = prometheus.NewDesc(
-		"hami_container_last_kernel_elapsed_seconds",
-		"Seconds since last kernel execution in container",
-		[]string{"namespace", "pod", "container", "vdevice_index", "device_uuid"}, nil,
-	)
-	ctrDeviceMigInfo = prometheus.NewDesc(
-		"hami_mig_device_info",
-		"MIG runtime identity for a container allocation",
-		[]string{"namespace", "pod", "container", "vdevice_index", "device_uuid", "mig_uuid", "profile", "gpu_instance_id", "compute_instance_id"}, nil,
-	)
-	ctrDeviceMemoryContextDesc = prometheus.NewDesc(
-		"hami_vgpu_memory_context_bytes",
-		"Container device memory context size in bytes",
-		[]string{"namespace", "pod", "container", "vdevice_index", "device_uuid"}, nil,
-	)
-
-	ctrDeviceMemoryModuleDesc = prometheus.NewDesc(
-		"hami_vgpu_memory_module_bytes",
-		"Container device memory module size in bytes",
-		[]string{"namespace", "pod", "container", "vdevice_index", "device_uuid"}, nil,
-	)
-
-	ctrDeviceMemoryBufferDesc = prometheus.NewDesc(
-		"hami_vgpu_memory_buffer_bytes",
-		"Container device memory buffer size in bytes",
-		[]string{"namespace", "pod", "container", "vdevice_index", "device_uuid"}, nil,
-	)
+	hostGPUdesc                = catalog.MustDesc("hami_host_gpu_memory_used_bytes")
+	hostGPUUtilizationdesc     = catalog.MustDesc("hami_host_gpu_utilization_ratio")
+	ctrvGPUdesc                = catalog.MustDesc("hami_vgpu_memory_used_bytes")
+	ctrvGPUlimitdesc           = catalog.MustDesc("hami_vgpu_memory_limit_bytes")
+	ctrDeviceMemorydesc        = catalog.MustDesc("hami_container_device_memory_bytes")
+	ctrDeviceUtilizationdesc   = catalog.MustDesc("hami_container_device_utilization_ratio")
+	ctrDeviceLastKernelDesc    = catalog.MustDesc("hami_container_last_kernel_elapsed_seconds")
+	ctrDeviceMigInfo           = catalog.MustDesc("hami_mig_device_info")
+	ctrDeviceMemoryContextDesc = catalog.MustDesc("hami_vgpu_memory_context_bytes")
+	ctrDeviceMemoryModuleDesc  = catalog.MustDesc("hami_vgpu_memory_module_bytes")
+	ctrDeviceMemoryBufferDesc  = catalog.MustDesc("hami_vgpu_memory_buffer_bytes")
 )
 
 // Legacy metric descriptors (populated only when --legacy-metrics is enabled).

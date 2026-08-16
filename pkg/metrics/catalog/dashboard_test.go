@@ -26,7 +26,7 @@ const shippedDashboard = "hami-vgpu-dashboard.json"
 
 func loadShippedDashboard(t *testing.T) *Dashboard {
 	t.Helper()
-	path := filepath.Join("..", "..", "..", "dashboards", shippedDashboard)
+	path := filepath.Join(repoRoot(t), "dashboards", shippedDashboard)
 	d, err := LoadDashboard(path)
 	if err != nil {
 		t.Fatalf("load %s: %v", path, err)

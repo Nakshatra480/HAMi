@@ -36,20 +36,20 @@ labels listed for the metric itself.
 | Metric | Type | Unit | Labels |
 | --- | --- | --- | --- |
 | `hami_build_info` | gauge | info | `build_date`, `compiler`, `go_version`, `platform`, `revision`, `version` |
-| `hami_gpu_core_allocated_ratio` | gauge | percent | `device_index`, `device_type`, `device_uuid`, `node` |
-| `hami_gpu_core_limit_ratio` | gauge | percent | `device_index`, `device_type`, `device_uuid`, `node` |
-| `hami_gpu_memory_allocated_bytes` | gauge | bytes | `device_cores`, `device_index`, `device_type`, `device_uuid`, `node` |
-| `hami_gpu_memory_limit_bytes` | gauge | bytes | `device_index`, `device_type`, `device_uuid`, `node` |
-| `hami_gpu_shared_count` | gauge | count | `device_index`, `device_type`, `device_uuid`, `node` |
-| `hami_node_gpu_memory_allocated_ratio` | gauge | ratio | `device_index`, `device_uuid`, `node` |
-| `hami_node_gpu_mig_instance_info` | gauge | info | `compute_instance_id`, `device_index`, `device_uuid`, `gpu_instance_id`, `mig_uuid`, `node`, `placement_size`, `placement_start`, `profile` |
-| `hami_node_gpu_overview` | gauge | bytes | `device_cores`, `device_index`, `device_memory_limit`, `device_type`, `device_uuid`, `node` |
-| `hami_resource_quota_used` | gauge | count | `limit`, `namespace`, `quota_name` |
-| `hami_scheduler_bind_total` | counter | count | `reason`, `result` |
+| `hami_gpu_core_allocated_ratio` | gauge | percent | `node`, `device_uuid`, `device_index`, `device_type` |
+| `hami_gpu_core_limit_ratio` | gauge | percent | `node`, `device_uuid`, `device_index`, `device_type` |
+| `hami_gpu_memory_allocated_bytes` | gauge | bytes | `node`, `device_uuid`, `device_index`, `device_cores`, `device_type` |
+| `hami_gpu_memory_limit_bytes` | gauge | bytes | `node`, `device_uuid`, `device_index`, `device_type` |
+| `hami_gpu_shared_count` | gauge | count | `node`, `device_uuid`, `device_index`, `device_type` |
+| `hami_node_gpu_memory_allocated_ratio` | gauge | ratio | `node`, `device_uuid`, `device_index` |
+| `hami_node_gpu_mig_instance_info` | gauge | info | `node`, `device_uuid`, `device_index`, `mig_uuid`, `profile`, `gpu_instance_id`, `compute_instance_id`, `placement_start`, `placement_size` |
+| `hami_node_gpu_overview` | gauge | bytes | `node`, `device_uuid`, `device_index`, `device_cores`, `device_memory_limit`, `device_type` |
+| `hami_resource_quota_used` | gauge | count | `namespace`, `quota_name`, `limit` |
+| `hami_scheduler_bind_total` | counter | count | `result`, `reason` |
 | `hami_scheduler_filter_duration_seconds` | histogram | seconds | `result` |
-| `hami_scheduler_filter_total` | counter | count | `reason`, `result` |
-| `hami_vgpu_core_allocated_ratio` | gauge | percent | `container_index`, `device_uuid`, `namespace`, `node`, `pod` |
-| `hami_vgpu_memory_allocated_bytes` | gauge | bytes | `container_index`, `device_uuid`, `namespace`, `node`, `pod` |
+| `hami_scheduler_filter_total` | counter | count | `result`, `reason` |
+| `hami_vgpu_core_allocated_ratio` | gauge | percent | `namespace`, `node`, `pod`, `container_index`, `device_uuid` |
+| `hami_vgpu_memory_allocated_bytes` | gauge | bytes | `namespace`, `node`, `pod`, `container_index`, `device_uuid` |
 
 ### What each metric means
 
@@ -134,17 +134,17 @@ labels listed for the metric itself.
 | Metric | Type | Unit | Labels |
 | --- | --- | --- | --- |
 | `hami_build_info` | gauge | info | `build_date`, `compiler`, `go_version`, `platform`, `revision`, `version` |
-| `hami_container_device_memory_bytes` | gauge | bytes | `container`, `device_uuid`, `namespace`, `pod`, `vdevice_index` |
-| `hami_container_device_utilization_ratio` | gauge | percent | `container`, `device_uuid`, `namespace`, `pod`, `vdevice_index` |
-| `hami_container_last_kernel_elapsed_seconds` | gauge | seconds | `container`, `device_uuid`, `namespace`, `pod`, `vdevice_index` |
-| `hami_host_gpu_memory_used_bytes` | gauge | bytes | `device_index`, `device_type`, `device_uuid` |
-| `hami_host_gpu_utilization_ratio` | gauge | percent | `device_index`, `device_type`, `device_uuid` |
-| `hami_mig_device_info` | gauge | info | `compute_instance_id`, `container`, `device_uuid`, `gpu_instance_id`, `mig_uuid`, `namespace`, `pod`, `profile`, `vdevice_index` |
-| `hami_vgpu_memory_buffer_bytes` | gauge | bytes | `container`, `device_uuid`, `namespace`, `pod`, `vdevice_index` |
-| `hami_vgpu_memory_context_bytes` | gauge | bytes | `container`, `device_uuid`, `namespace`, `pod`, `vdevice_index` |
-| `hami_vgpu_memory_limit_bytes` | gauge | bytes | `container`, `device_uuid`, `namespace`, `pod`, `vdevice_index` |
-| `hami_vgpu_memory_module_bytes` | gauge | bytes | `container`, `device_uuid`, `namespace`, `pod`, `vdevice_index` |
-| `hami_vgpu_memory_used_bytes` | gauge | bytes | `container`, `device_uuid`, `namespace`, `pod`, `vdevice_index` |
+| `hami_container_device_memory_bytes` | gauge | bytes | `namespace`, `pod`, `container`, `vdevice_index`, `device_uuid` |
+| `hami_container_device_utilization_ratio` | gauge | percent | `namespace`, `pod`, `container`, `vdevice_index`, `device_uuid` |
+| `hami_container_last_kernel_elapsed_seconds` | gauge | seconds | `namespace`, `pod`, `container`, `vdevice_index`, `device_uuid` |
+| `hami_host_gpu_memory_used_bytes` | gauge | bytes | `device_index`, `device_uuid`, `device_type` |
+| `hami_host_gpu_utilization_ratio` | gauge | percent | `device_index`, `device_uuid`, `device_type` |
+| `hami_mig_device_info` | gauge | info | `namespace`, `pod`, `container`, `vdevice_index`, `device_uuid`, `mig_uuid`, `profile`, `gpu_instance_id`, `compute_instance_id` |
+| `hami_vgpu_memory_buffer_bytes` | gauge | bytes | `namespace`, `pod`, `container`, `vdevice_index`, `device_uuid` |
+| `hami_vgpu_memory_context_bytes` | gauge | bytes | `namespace`, `pod`, `container`, `vdevice_index`, `device_uuid` |
+| `hami_vgpu_memory_limit_bytes` | gauge | bytes | `namespace`, `pod`, `container`, `vdevice_index`, `device_uuid` |
+| `hami_vgpu_memory_module_bytes` | gauge | bytes | `namespace`, `pod`, `container`, `vdevice_index`, `device_uuid` |
+| `hami_vgpu_memory_used_bytes` | gauge | bytes | `namespace`, `pod`, `container`, `vdevice_index`, `device_uuid` |
 
 ### What each metric means
 

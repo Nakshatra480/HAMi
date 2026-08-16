@@ -26,6 +26,28 @@ import (
 
 var update = flag.Bool("update", false, "rewrite docs/metrics.md from the catalog")
 
+// repoRoot walks up from the test's working directory to the directory holding
+// go.mod. The alternative is a relative path like ../../../, which silently
+// depends on where this package sits in the tree.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("working directory: %v", err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("no go.mod above %s", dir)
+		}
+		dir = parent
+	}
+}
+
 func TestCatalogIsWellFormed(t *testing.T) {
 	if err := Validate(); err != nil {
 		t.Fatalf("catalog is not well formed: %v", err)
@@ -115,7 +137,7 @@ func TestGrafanaUnitSeparatesRatioFromPercent(t *testing.T) {
 }
 
 func TestMetricsReferenceIsUpToDate(t *testing.T) {
-	path := filepath.Join("..", "..", "..", "docs", "metrics.md")
+	path := filepath.Join(repoRoot(t), "docs", "metrics.md")
 	want := Markdown()
 
 	if *update {
