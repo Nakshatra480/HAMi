@@ -423,11 +423,11 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 75 },
-              { "color": "red", "value": 90 }
+              { "color": "yellow", "value": 0.75 },
+              { "color": "red", "value": 0.9 }
             ]
           },
-          "unit": "percent"
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -837,6 +837,6 @@
   "timezone": "",
   "title": "HAMi vGPU metrics",
   "uid": "hami-vgpu-metrics",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

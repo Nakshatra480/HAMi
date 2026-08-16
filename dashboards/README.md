@@ -65,12 +65,15 @@ on the metrics port; the scheduler and the vGPU monitor each expose a subset):
 | `hami_gpu_memory_allocated_bytes` | scheduler | GPU memory allocated to pods. |
 | `hami_gpu_core_allocated_ratio` | scheduler | Allocated compute cores (0-100). |
 | `hami_gpu_shared_count` | scheduler | Containers sharing a device. |
-| `hami_node_gpu_memory_allocated_ratio` | scheduler | Per-node memory allocated (0-100). |
+| `hami_node_gpu_memory_allocated_ratio` | scheduler | Per-device memory allocated (0-1). |
 | `hami_host_gpu_memory_used_bytes` | vGPU monitor | Real memory in use per device. |
 | `hami_host_gpu_utilization_ratio` | vGPU monitor | Physical GPU utilization (0-100). |
 | `hami_vgpu_memory_used_bytes` | vGPU monitor | Per-container vGPU memory used. |
 | `hami_vgpu_memory_limit_bytes` | vGPU monitor | Per-container vGPU memory limit. |
 | `hami_container_device_utilization_ratio` | vGPU monitor | Per-container utilization (0-100). |
 
-> Utilization and allocation-ratio metrics are reported on a 0-100 scale, so the
-> percentage panels display them directly without rescaling.
+> The `_ratio` suffix does not imply one scale. `hami_gpu_core_allocated_ratio`,
+> `hami_host_gpu_utilization_ratio` and `hami_container_device_utilization_ratio`
+> carry 0-100 and their panels use the Grafana `percent` unit.
+> `hami_node_gpu_memory_allocated_ratio` carries 0-1 and its panel uses
+> `percentunit`, which multiplies by 100 for display.
