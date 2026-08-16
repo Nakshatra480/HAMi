@@ -157,3 +157,41 @@ func TestMetricsReferenceIsUpToDate(t *testing.T) {
 			"  go test ./pkg/metrics/catalog/ -run TestMetricsReferenceIsUpToDate -update", path)
 	}
 }
+
+func TestMustDescBuildsFromTheDeclaration(t *testing.T) {
+	desc := MustDesc("hami_gpu_memory_limit_bytes")
+	rendered := desc.String()
+
+	entry, _ := Lookup("hami_gpu_memory_limit_bytes")
+	if !strings.Contains(rendered, entry.Help) {
+		t.Errorf("descriptor does not carry the declared help string: %s", rendered)
+	}
+	// The labels have to appear in declared order, because that is the order
+	// the collector passes values in.
+	if want := strings.Join(entry.Labels, ","); !strings.Contains(rendered, want) {
+		t.Errorf("descriptor labels are not %q: %s", want, rendered)
+	}
+}
+
+func TestMustDescRejectsAnUndeclaredMetric(t *testing.T) {
+	// A collector that names a metric the catalog does not know about should
+	// fail at startup, not export something undocumented.
+	defer func() {
+		if recover() == nil {
+			t.Error("MustDesc accepted a metric that is not declared")
+		}
+	}()
+	MustDesc("hami_not_a_real_metric")
+}
+
+func TestMustDescRejectsNonGaugeMetrics(t *testing.T) {
+	// Counters and histograms are built by their own constructors, which own
+	// their descriptors. Handing one out here would produce a second
+	// descriptor for the same name.
+	defer func() {
+		if recover() == nil {
+			t.Error("MustDesc handed out a descriptor for a counter")
+		}
+	}()
+	MustDesc("hami_scheduler_filter_total")
+}
